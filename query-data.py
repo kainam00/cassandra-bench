@@ -5,6 +5,8 @@ import os, cassandra, threading, time, sys
 
 # Predefined variables
 batchsize=1000
+startKey=1000
+endKey=2000000
 # Place to write results
 outFile = open(os.devnull,"w")
 #outFile = open('/tmp/dumpfile',"w")
@@ -14,13 +16,34 @@ outFile = open(os.devnull,"w")
 cluster = Cluster(['0.0.0.0'])
 session = cluster.connect()
 session.execute("USE bench")
-paging = {}
-query = "SELECT * FROM bench_raw"
-statement = SimpleStatement(query, fetch_size=batchsize)
+currentKey=startKey
+found=0
+queried=0
+start=time.time()
+while currentKey < endKey:
+    query = "SELECT * FROM bench_raw where key=" + str(currentKey)
+    statement = SimpleStatement(query)
+    results = session.execute(statement)
+    currentKey = currentKey+1
 
-# Execute the first query and save the paging state
-results = session.execute(statement)
-paging['paging_state'] = results.paging_state
+    queried=queried+1
+
+    numResults=len(results.current_rows)
+    if numResults > 0:
+        found=found+1
+
+    # Write to file
+    for row in results:
+        outFile.write(str(row.key) + "," + str(row.value) +"\n")
+
+    # Output every batchsize number of queries
+    if queried % batchsize == 0:
+        end=time.time()
+        print "Queried " + str(queried) + ". Found " + str(found) + ". At " + str(batchsize/(end-start)) + " queries/second"
+        start=time.time()
+
+
+sys.exit(1)
 
 # Keep iterating through pages
 numResults = batchsize
