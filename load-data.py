@@ -4,7 +4,7 @@ import os, cassandra, threading, time
 
 # Predefined variables
 # Total records to load
-totalRecords=10000000
+totalRecords=1000000
 # Batch size
 batchsize=1000
 # Number of threads to run
@@ -12,26 +12,26 @@ threadnum=4
 
 
 class insertBatch (threading.Thread):
-    def __init__(self, startkey, batchsize, session):
+    def __init__(self, startkey, batchsize):
         threading.Thread.__init__(self)
         self.batchsize = batchsize
-        self.session = session
+        cluster = Cluster(['0.0.0.0'])
+        self.session = cluster.connect('bench')
         self.startkey = startkey
 
     def run(self):
         # Generate data
         data = {}
-        for i in range(1,batchsize):
+        for i in range(0,self.batchsize):
             entry = {
-                "key": startkey+i,
+                "key": startkey + i,
                 "value": os.urandom(5000)
             }
             data[i]=entry
 
         # Insert data
         for key, value in data.iteritems():
-            session.execute("INSERT INTO bench_raw(key, value, column1) VALUES(%s, %s, %s)",(value["key"], bytearray(value["value"]), bytearray(1)))
-      
+            self.session.execute("INSERT INTO bench_raw(key, value, column1) VALUES(%s, %s, %s)",(value["key"], bytearray(value["value"]), bytearray(1)))
         print ".",
 
 # Connect to the local cassandra cluster
@@ -60,7 +60,7 @@ while loadedRecords < totalRecords:
 
     for i in range(0,threadnum):
         # Create new threads
-        thread = insertBatch(startkey, batchsize, cluster.connect())
+        thread = insertBatch(startkey, batchsize)
         startkey=startkey+batchsize
 
         # Start new Threads and store them in an array to keep track
@@ -73,6 +73,7 @@ while loadedRecords < totalRecords:
 
     loadedRecords = loadedRecords+batchsize*threadnum
     end=time.time()
+    print startkey
     print "Loaded " + str(loadedRecords) + " at " + str(batchsize*threadnum/(end-start)) + " records/sec"
 
 
